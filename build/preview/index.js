@@ -41860,6 +41860,7 @@ function previewInput() {
         githubToken: (0, core_1.getInput)('github-token'),
         // Note, `dev-build` is prefered, but `dev-client` is supported to aovid confusion
         qrTarget: qrTarget,
+        commentBranchQr: (0, core_1.getBooleanInput)('comment-branch-qr'),
     };
 }
 exports.previewInput = previewInput;
@@ -41881,9 +41882,13 @@ async function previewAction(input = previewInput()) {
     if (!config.extra?.eas?.projectId) {
         return (0, core_1.setFailed)(`Missing 'extra.eas.projectId' in app.json or app.config.js.`);
     }
-    const variables = getVariables(config, updates, input);
+    const { id: branchId } = await (0, core_1.group)(`Run eas branch:view"`, () => (0, eas_1.getBranchView)(input.workingDirectory, update.branch));
+    if (!branchId) {
+        return (0, core_1.setFailed)(`No branch found in command output.`);
+    }
+    const variables = getVariables(config, updates, input, branchId);
     const messageId = (0, utils_1.template)(input.commentId, variables);
-    const messageBody = createSummary(updates, variables);
+    const messageBody = createSummary(updates, variables, input.commentBranchQr);
     if (!input.shouldComment) {
         (0, core_1.info)(`Skipped comment: 'comment' is disabled`);
     }
@@ -41929,7 +41934,7 @@ function sanitizeCommand(input) {
 /**
  * Generate useful variables for the message body, and as step outputs.
  */
-function getVariables(config, updates, options) {
+function getVariables(config, updates, options, branchId) {
     const projectId = config.extra?.eas?.projectId;
     const android = updates.find(update => update.platform === 'android');
     const ios = updates.find(update => update.platform === 'ios');
@@ -41951,6 +41956,7 @@ function getVariables(config, updates, options) {
         link: (0, eas_1.getUpdateGroupWebsite)({ projectId, updateGroupId: updates[0].group }),
         // These are safe to access regardless of the update groups
         branchName: updates[0].branch,
+        branchQR: (0, eas_1.getBranchQr)({ projectId, branchId, appSlug, qrTarget }),
         message: updates[0].message,
         createdAt: updates[0].createdAt,
         gitCommitHash: updates[0].gitCommitHash,
@@ -42015,10 +42021,10 @@ exports.getSchemesInOrderFromConfig = getSchemesInOrderFromConfig;
  * Generate the message body for a single update.
  * Note, this is not configurable, but you can use the variables used to construct your own.
  */
-function createSummary(updates, vars) {
+function createSummary(updates, vars, useBranchQr) {
     // If all updates are in the same group, we can unify QR codes
     if (updates.every(update => update.group === updates[0].group)) {
-        return createSingleQrSummary(updates, vars);
+        return createSingleQrSummary(updates, vars, useBranchQr);
     }
     return createMultipleQrSummary(updates, vars);
 }
@@ -42037,12 +42043,13 @@ function createSummaryHeader(updates, vars) {
 - ${platformName} → ${platformValue}
 ${appSchemes}`.trim();
 }
-function createSingleQrSummary(updates, vars) {
+function createSingleQrSummary(updates, vars, useBranchQr) {
+    const qr = useBranchQr ? vars.branchQR : vars.qr;
     return `${createSummaryHeader(updates, vars)}
 - Runtime Version → **${vars.runtimeVersion}**
 - **[More info](${vars.link})**
 
-<a href="${vars.qr}"><img src="${vars.qr}" width="250px" height="250px" /></a>
+<a href="${qr}"><img src="${qr}" width="250px" height="250px" /></a>
 
 > Learn more about [𝝠 Expo Github Action](https://github.com/expo/expo-github-action/tree/main/preview#example-workflows)`;
 }
@@ -42085,7 +42092,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getUpdateGroupWebsite = exports.getUpdateGroupQr = exports.createUpdate = exports.assertEasVersion = void 0;
+exports.getUpdateGroupWebsite = exports.getBranchQr = exports.getUpdateGroupQr = exports.getBranchView = exports.createUpdate = exports.assertEasVersion = void 0;
 const exec_1 = __nccwpck_require__(1514);
 const io_1 = __nccwpck_require__(7436);
 const semver_1 = __importDefault(__nccwpck_require__(1383));
@@ -42126,6 +42133,23 @@ async function createUpdate(cwd, command) {
 }
 exports.createUpdate = createUpdate;
 /**
+ * Create a new EAS Update using the user-provided command.
+ * The command should be anything after `eas ...`.
+ */
+async function getBranchView(cwd, branch) {
+    let stdout = '';
+    try {
+        ({ stdout } = await (0, exec_1.getExecOutput)((await (0, io_1.which)('eas', true)) + ` branch:view ${branch} --json --non-interactive`, undefined, {
+            cwd,
+        }));
+    }
+    catch (error) {
+        throw new Error(`Could not create a new EAS Update`, { cause: error });
+    }
+    return JSON.parse(stdout);
+}
+exports.getBranchView = getBranchView;
+/**
  * Create a QR code link for an EAS Update.
  */
 function getUpdateGroupQr({ projectId, updateGroupId, appSlug, qrTarget, }) {
@@ -42141,6 +42165,22 @@ function getUpdateGroupQr({ projectId, updateGroupId, appSlug, qrTarget, }) {
     return url.toString();
 }
 exports.getUpdateGroupQr = getUpdateGroupQr;
+/**
+ * Create a QR code link for a branch.
+ */
+function getBranchQr({ projectId, branchId, appSlug, qrTarget, }) {
+    const url = new url_1.URL('https://qr.expo.dev/eas-update');
+    if (qrTarget === 'dev-build') {
+        // While the parameter is called `appScheme`, it's actually the app's slug
+        // This should only be added when using dev clients as target
+        // See: https://github.com/expo/expo/blob/8ae75dde393e5d2393d446227a1fe2482c75eec3/packages/expo-dev-client/plugin/src/getDefaultScheme.ts#L17
+        url.searchParams.append('appScheme', appSlug.replace(/[^A-Za-z0-9+\-.]/g, ''));
+    }
+    url.searchParams.append('projectId', projectId);
+    url.searchParams.append('branchId', branchId);
+    return url.toString();
+}
+exports.getBranchQr = getBranchQr;
 /** Create the absolute link to the update group on expo.dev */
 function getUpdateGroupWebsite({ projectId, updateGroupId, }) {
     return `https://expo.dev/projects/${projectId}/updates/${updateGroupId}`;

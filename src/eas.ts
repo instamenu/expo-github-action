@@ -25,6 +25,13 @@ export interface EasUpdate {
   gitCommitHash: string;
 }
 
+export interface EasBranchView {
+  /** The branch Name */
+  name: string;
+  /** The branch ID */
+  id: string;
+}
+
 /** We can only run the `preview` sub-action with newer versions of EAS CLI */
 export async function assertEasVersion(versionRange: string) {
   let stdout = '';
@@ -66,6 +73,25 @@ export async function createUpdate(cwd: string, command: string): Promise<EasUpd
 }
 
 /**
+ * Create a new EAS Update using the user-provided command.
+ * The command should be anything after `eas ...`.
+ */
+export async function getBranchView(cwd: string, branch: string): Promise<EasBranchView> {
+  let stdout = '';
+
+  try {
+    ({ stdout } = await getExecOutput((await which('eas', true)) + ` branch:view ${branch} --json --non-interactive`, undefined, {
+      cwd,
+    }));
+  } catch (error: unknown) {
+    throw new Error(`Could not create a new EAS Update`, { cause: error });
+  }
+
+  return JSON.parse(stdout);
+}
+
+
+/**
  * Create a QR code link for an EAS Update.
  */
 export function getUpdateGroupQr({
@@ -90,6 +116,35 @@ export function getUpdateGroupQr({
 
   url.searchParams.append('projectId', projectId);
   url.searchParams.append('groupId', updateGroupId);
+
+  return url.toString();
+}
+
+/**
+ * Create a QR code link for a branch.
+ */
+export function getBranchQr({
+  projectId,
+  branchId,
+  appSlug,
+  qrTarget,
+}: {
+  projectId: string;
+  branchId: string;
+  appSlug: string;
+  qrTarget: 'expo-go' | 'dev-build';
+}): string {
+  const url = new URL('https://qr.expo.dev/eas-update');
+
+  if (qrTarget === 'dev-build') {
+    // While the parameter is called `appScheme`, it's actually the app's slug
+    // This should only be added when using dev clients as target
+    // See: https://github.com/expo/expo/blob/8ae75dde393e5d2393d446227a1fe2482c75eec3/packages/expo-dev-client/plugin/src/getDefaultScheme.ts#L17
+    url.searchParams.append('appScheme', appSlug.replace(/[^A-Za-z0-9+\-.]/g, ''));
+  }
+
+  url.searchParams.append('projectId', projectId);
+  url.searchParams.append('branchId', branchId);
 
   return url.toString();
 }

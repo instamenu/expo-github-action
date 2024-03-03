@@ -49,6 +49,7 @@ const fakeUpdatesSingle: EasUpdate[] = [
 ];
 
 const fakeUpdatesMultiple = fakeUpdatesSingle.map(update => ({ ...update, group: `fake-group-${update.id}` }));
+const fakeBranchId = 'fake-branch-id';
 
 describe(getQrTarget, () => {
   it('returns `dev-build` for `qr-target: dev-build`', () => {
@@ -100,8 +101,13 @@ describe(getSchemesInOrderFromConfig, () => {
 describe(createSummary, () => {
   describe('single update group', () => {
     it('returns expected message for both platforms', () => {
-      expect(createSummary(fakeUpdatesSingle, getVariables(fakeExpoConfig, fakeUpdatesSingle, fakeOptions)))
-        .toMatchInlineSnapshot(`
+      expect(
+        createSummary(
+          fakeUpdatesSingle,
+          getVariables(fakeExpoConfig, fakeUpdatesSingle, fakeOptions, fakeBranchId),
+          false
+        )
+      ).toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -117,8 +123,13 @@ describe(createSummary, () => {
 
     it('returns expected message for both platforms with custom app scheme', () => {
       const customSchemeConfig = { ...fakeExpoConfig, scheme: ['ega', 'expogithubaction'] };
-      expect(createSummary(fakeUpdatesSingle, getVariables(customSchemeConfig, fakeUpdatesSingle, fakeOptions)))
-        .toMatchInlineSnapshot(`
+      expect(
+        createSummary(
+          fakeUpdatesSingle,
+          getVariables(customSchemeConfig, fakeUpdatesSingle, fakeOptions, fakeBranchId),
+          false
+        )
+      ).toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -135,7 +146,8 @@ describe(createSummary, () => {
 
     it('returns expected message for android only', () => {
       const fakeUpdate = fakeUpdatesSingle.filter(update => update.platform === 'android');
-      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions))).toMatchInlineSnapshot(`
+      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions, fakeBranchId), false))
+        .toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -151,7 +163,8 @@ describe(createSummary, () => {
 
     it('returns expected message for ios only', () => {
       const fakeUpdate = fakeUpdatesSingle.filter(update => update.platform === 'ios');
-      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions))).toMatchInlineSnapshot(`
+      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions, fakeBranchId), false))
+        .toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -164,12 +177,34 @@ describe(createSummary, () => {
         > Learn more about [𝝠 Expo Github Action](https://github.com/expo/expo-github-action/tree/main/preview#example-workflows)"
       `);
     });
+
+    it('returns expected message for branch qr code', () => {
+      const fakeUpdate = fakeUpdatesSingle.filter(update => update.platform === 'ios');
+      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions, fakeBranchId), true))
+        .toMatchInlineSnapshot(`
+        "🚀 Expo preview is ready!
+
+        - Project → **fake-project**
+        - Platform → **ios**
+        - Runtime Version → **exposdk:47.0.0**
+        - **[More info](https://expo.dev/projects/fake-project-id/updates/fake-group-id)**
+
+        <a href="https://qr.expo.dev/eas-update?appScheme=fake-project&projectId=fake-project-id&branchId=fake-branch-id"><img src="https://qr.expo.dev/eas-update?appScheme=fake-project&projectId=fake-project-id&branchId=fake-branch-id" width="250px" height="250px" /></a>
+
+        > Learn more about [𝝠 Expo Github Action](https://github.com/expo/expo-github-action/tree/main/preview#example-workflows)"
+      `);
+    });
   });
 
   describe('mutliple update groups', () => {
     it('returns expected message for both platforms', () => {
-      expect(createSummary(fakeUpdatesMultiple, getVariables(fakeExpoConfig, fakeUpdatesMultiple, fakeOptions)))
-        .toMatchInlineSnapshot(`
+      expect(
+        createSummary(
+          fakeUpdatesMultiple,
+          getVariables(fakeExpoConfig, fakeUpdatesMultiple, fakeOptions, fakeBranchId),
+          false
+        )
+      ).toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -185,7 +220,8 @@ describe(createSummary, () => {
 
     it('returns expected message for android only', () => {
       const fakeUpdate = fakeUpdatesSingle.filter(update => update.platform === 'android');
-      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions))).toMatchInlineSnapshot(`
+      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions, fakeBranchId), false))
+        .toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -201,7 +237,8 @@ describe(createSummary, () => {
 
     it('returns expected message for ios only', () => {
       const fakeUpdate = fakeUpdatesSingle.filter(update => update.platform === 'ios');
-      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions))).toMatchInlineSnapshot(`
+      expect(createSummary(fakeUpdate, getVariables(fakeExpoConfig, fakeUpdate, fakeOptions, fakeBranchId), false))
+        .toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**
@@ -217,8 +254,13 @@ describe(createSummary, () => {
 
     it('returns Expo Go compatible QR code when forced', () => {
       const customOptions: typeof fakeOptions = { ...fakeOptions, qrTarget: 'expo-go' };
-      expect(createSummary(fakeUpdatesMultiple, getVariables(fakeExpoConfig, fakeUpdatesMultiple, customOptions)))
-        .toMatchInlineSnapshot(`
+      expect(
+        createSummary(
+          fakeUpdatesMultiple,
+          getVariables(fakeExpoConfig, fakeUpdatesMultiple, customOptions, fakeBranchId),
+          false
+        )
+      ).toMatchInlineSnapshot(`
         "🚀 Expo preview is ready!
 
         - Project → **fake-project**

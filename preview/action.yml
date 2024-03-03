@@ -18,6 +18,10 @@ inputs:
     default: true
   comment-id:
     description: unique id template to prevent duplicate comments
+  comment-branch-qr:
+    description: If the action should use the branch sepcific QR code in the comment instead of the update QR code
+    required: false
+    default: false
   qr-target:
     description: How the EAS Update is opened through the QR code, either `dev-build` or `expo-go`. Defaults to `dev-build` if `expo-dev-client` is used in project.
     required: false
@@ -59,6 +63,8 @@ outputs:
     description: Absolute URL to platform-independent update on expo.dev
   branchName:
     description: Branch name that was used when creating this update
+  branchQR:
+    description: Absolute URL to the QR code to load this branch
   message:
     description: Custom message to describe the update
   createdAt:

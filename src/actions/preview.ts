@@ -1,7 +1,15 @@
 import { getBooleanInput, getInput, setOutput, group, setFailed, info, debug } from '@actions/core';
 import { ExpoConfig } from '@expo/config';
 
-import { assertEasVersion, createUpdate, EasUpdate, getUpdateGroupQr, getUpdateGroupWebsite } from '../eas';
+import {
+  assertEasVersion,
+  createUpdate,
+  EasUpdate,
+  getBranchView,
+  getUpdateGroupQr,
+  getUpdateGroupWebsite,
+  getBranchQr,
+} from '../eas';
 import { projectAppType } from '../expo';
 import { createIssueComment, hasPullContext, pullContext } from '../github';
 import { loadProjectConfig } from '../project';
@@ -24,6 +32,7 @@ export function previewInput() {
     githubToken: getInput('github-token'),
     // Note, `dev-build` is prefered, but `dev-client` is supported to aovid confusion
     qrTarget: qrTarget as undefined | 'expo-go' | 'dev-build' | 'dev-client',
+    commentBranchQr: getBooleanInput('comment-branch-qr'),
   };
 }
 
@@ -50,9 +59,15 @@ export async function previewAction(input = previewInput()) {
     return setFailed(`Missing 'extra.eas.projectId' in app.json or app.config.js.`);
   }
 
-  const variables = getVariables(config, updates, input);
+  const { id: branchId } = await group(`Run eas branch:view"`, () =>
+    getBranchView(input.workingDirectory, update.branch)
+  );
+  if (!branchId) {
+    return setFailed(`No branch found in command output.`);
+  }
+  const variables = getVariables(config, updates, input, branchId);
   const messageId = template(input.commentId, variables);
-  const messageBody = createSummary(updates, variables);
+  const messageBody = createSummary(updates, variables, input.commentBranchQr);
 
   if (!input.shouldComment) {
     info(`Skipped comment: 'comment' is disabled`);
@@ -103,7 +118,12 @@ function sanitizeCommand(input: string): string {
 /**
  * Generate useful variables for the message body, and as step outputs.
  */
-export function getVariables(config: ExpoConfig, updates: EasUpdate[], options: ReturnType<typeof previewInput>) {
+export function getVariables(
+  config: ExpoConfig,
+  updates: EasUpdate[],
+  options: ReturnType<typeof previewInput>,
+  branchId: string
+) {
   const projectId: string = config.extra?.eas?.projectId;
   const android = updates.find(update => update.platform === 'android');
   const ios = updates.find(update => update.platform === 'ios');
@@ -127,6 +147,7 @@ export function getVariables(config: ExpoConfig, updates: EasUpdate[], options: 
     link: getUpdateGroupWebsite({ projectId, updateGroupId: updates[0].group }),
     // These are safe to access regardless of the update groups
     branchName: updates[0].branch,
+    branchQR: getBranchQr({ projectId, branchId, appSlug, qrTarget }),
     message: updates[0].message,
     createdAt: updates[0].createdAt,
     gitCommitHash: updates[0].gitCommitHash,
@@ -196,10 +217,10 @@ export function getSchemesInOrderFromConfig(config: ExpoConfig) {
  * Generate the message body for a single update.
  * Note, this is not configurable, but you can use the variables used to construct your own.
  */
-export function createSummary(updates: EasUpdate[], vars: ReturnType<typeof getVariables>) {
+export function createSummary(updates: EasUpdate[], vars: ReturnType<typeof getVariables>, useBranchQr: boolean) {
   // If all updates are in the same group, we can unify QR codes
   if (updates.every(update => update.group === updates[0].group)) {
-    return createSingleQrSummary(updates, vars);
+    return createSingleQrSummary(updates, vars, useBranchQr);
   }
 
   return createMultipleQrSummary(updates, vars);
@@ -222,12 +243,13 @@ function createSummaryHeader(updates: EasUpdate[], vars: ReturnType<typeof getVa
 ${appSchemes}`.trim();
 }
 
-function createSingleQrSummary(updates: EasUpdate[], vars: ReturnType<typeof getVariables>) {
+function createSingleQrSummary(updates: EasUpdate[], vars: ReturnType<typeof getVariables>, useBranchQr: boolean) {
+  const qr = useBranchQr ? vars.branchQR : vars.qr;
   return `${createSummaryHeader(updates, vars)}
 - Runtime Version → **${vars.runtimeVersion}**
 - **[More info](${vars.link})**
 
-<a href="${vars.qr}"><img src="${vars.qr}" width="250px" height="250px" /></a>
+<a href="${qr}"><img src="${qr}" width="250px" height="250px" /></a>
 
 > Learn more about [𝝠 Expo Github Action](https://github.com/expo/expo-github-action/tree/main/preview#example-workflows)`;
 }

@@ -18,6 +18,10 @@ inputs:
     default: true
   comment-id:
     description: unique id template to prevent duplicate comments
+  branch-qr:
+    description: If the action should generate a QR code for the specified branch
+    required: false
+    default: false
   qr-target:
     description: How the EAS Update is opened through the QR code, either `dev-build` or `expo-go`. Defaults to `dev-build` if `expo-dev-client` is used in project.
     required: false
@@ -48,7 +52,6 @@ outputs:
     description: The unique comment ID to prevent duplicate comments
   comment:
     description: The comment with information about the updates
-
   groupId:
     description: Update group ID that contains one or more platform-specific updates
   runtimeVersion:
